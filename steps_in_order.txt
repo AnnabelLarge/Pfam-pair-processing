@@ -1,0 +1,43 @@
+download files and gunzip:
+=================================
+alignments: 
+-----------
+wget "https://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam36.0/Pfam-A.seed.gz" && \
+gunzip Pfam-A.seed.gz
+
+trees: 
+-------
+wget "https://ftp.ebi.ac.uk/pub/databases/Pfam/releases/Pfam36.0/trees.tgz" && \
+tar -xzvf trees.tgz && \
+mv nfs/production/agb/pfam/sequpd/36.0/Release/36.0/trees .
+
+
+
+
+
+
+
+
+
+
+
+
+
+putative new order:
+[X] split seed alignments file
+[X] do all MSA cleaning; track stats as you clean
+   [X] remove short pepetides
+   [X] remove proteins with invalid chars: B,O,U,X,Z
+   [X] convert all sequences to uppercase
+   [X] remove duplicates within and across MSAs
+[X] check if MSA only has one sequence left
+[X] fix all trees when done cleaning
+[X] find pfams that are missing trees; externally need to use FastTree to replace these
+
+
+common names
+-------------
+seed_alignment_dir
+tree_dir
+pfam_seed_file
+
