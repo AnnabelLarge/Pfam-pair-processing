@@ -13,7 +13,7 @@ import random
 import math
 from copy import deepcopy
 
-from scripts_on_HPC.precompute_align_idxes import generate_indices
+from generate_inputs.precompute_align_idxes import generate_indices
 from utils import make_sub_folder
 
 
@@ -362,37 +362,10 @@ def featurize_one_pfam(pfam, seed_folder, trees_folder, pairs_from, filename,
                                           gap_tok = 43, 
                                           align_pad = -9)
     
-    # ### create different pairHMM input
-    # align_len = (hmm_align_format != 0).sum(axis=1)[:,0]
-    # out = summarize_alignment(hmm_align_format, align_len, gap_tok=43)
-    # subCounts_persamp = out[0]
-    # insCounts_persamp = out[1]
-    # delCounts_persamp = out[2]
-    # transCounts_persamp = out[3]
-    # del out, align_len
-    
-    # AA_counts = get_aa_counts(hmm_align_format)
-    
-    # non_gaps = np.where((hmm_align_format != 43) & (hmm_align_format != 0), 1, 0)
-    # match_pos = np.where(np.sum(non_gaps, axis=-1) == 2, True, False)[:,:,None]
-    # match_mask = np.repeat(match_pos, 2, axis=-1)
-    # masked_hmm_align_format = hmm_align_format * match_mask
-    # del non_gaps, match_pos, match_mask
-    
-    # AA_counts_subsOnly = get_aa_counts(masked_hmm_align_format)
-    
-    
     neural_dset = {'sequences_paths': safe_int8(neural_format),
                     'align_idxes': safe_int16(neural_align_idxes)}
     
     hmm_pair = {'pair_alignments': safe_int8(hmm_align_format)}
-    
-    # hmm_precalc = {'subsCounts': subCounts_persamp,
-    #                'insCounts': insCounts_persamp,
-    #                'delCounts': delCounts_persamp,
-    #                'transCounts': transCounts_persamp,
-    #                'AAcounts': AA_counts,
-    #                'AAcounts_subsOnly': AA_counts_subsOnly}
     
     return neural_dset, hmm_pair, metadata 
 
@@ -489,21 +462,17 @@ def samples_from_file(pfam,
 ### script directly                                          ##################
 ### TODO: make these general function wrappers               ##################
 ###############################################################################
-RANDOM_SEED = 2
-random.seed(RANDOM_SEED)
-PAD_TO = 4100
-
 if __name__ == '__main__':
     import os
     import sys
     
-    # RANDOM_SEED = 2
-    # random.seed(RANDOM_SEED)
-    # PAD_TO = 4100
+    RANDOM_SEED = 2
+    random.seed(RANDOM_SEED)
+    PAD_TO = 4100
     
     
+    ### This is the text file that lists pfams in a given split
     pfam_filename = sys.argv[1]
-    # pfam_filename = 'pfams_in_OOD_valid.tsv'
     
     splitname = pfam_filename.replace('.tsv','').split('_')[-1]
     
@@ -518,7 +487,7 @@ if __name__ == '__main__':
     file_lst = [f'CHERRIES-FROM_trees/{pf}_cherries.tsv' 
                 for pf in pfams_in_split]
     
-    for suffix in ['neural', 'hmm_pairAlignments', 'all_metadata']: #, 'precalculated_counts']:
+    for suffix in ['neural', 'hmm_pairAlignments', 'all_metadata']: 
         rand_folder = f'{rand_dset_prefix}_{suffix}'
         cherries_folder = f'{cherries_dset_prefix}_{suffix}'
         make_sub_folder(in_dir = '.', sub_folder=rand_folder)

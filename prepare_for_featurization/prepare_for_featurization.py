@@ -11,12 +11,12 @@ from prepare_for_featurization.cherry_picking_fns import pick_trees_serially
 from prepare_for_featurization.make_splits import make_splits
 
 
-def prepare_for_featurization(pfam_seed_file: str,
-                              tree_dir: str,
-                              num_splits: int = 10,
-                              rand_key: int = 6,
-                              topk1_valid: int = 3,
-                              topk2_valid: int = 8):
+def main(pfam_seed_file: str,
+         tree_dir: str,
+         num_splits: int = 10,
+         rand_key: int = 6,
+         topk1_valid: int = 3,
+         topk2_valid: int = 8):
     """
     wrapper to find cherries and make PFam/Clan-level splits
     
@@ -37,13 +37,4 @@ def prepare_for_featurization(pfam_seed_file: str,
                 rand_key = rand_key,
                 topk1_valid = topk1_valid,
                 topk2_valid = topk2_valid)
-
-
-### testing
-if __name__ == '__main__':
-    prepare_for_featurization(pfam_seed_file = 'EXAMPLE_Pfam-A.seed',
-                              tree_dir = 'trees',
-                              num_splits = 2,
-                              topk1_valid = 1,
-                              topk2_valid = 0)
 

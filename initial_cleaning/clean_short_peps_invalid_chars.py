@@ -9,7 +9,7 @@ import pandas as pd
 import os
 from tqdm import tqdm
 
-from utils import (make_orig_folder, 
+from utils.utils import (make_orig_folder, 
                    move_file_to_originals, 
                    rename_file_in_place)
 

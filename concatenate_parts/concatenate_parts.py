@@ -229,9 +229,9 @@ def combine_hmm_precalc_inputs(splitname: str,
         
 
 
-def concatenate_parts(splitname: str,
-                      alphabet_size: int = 20,
-                      include_pair_align: bool = False):
+def main(splitname: str,
+         alphabet_size: int = 20,
+         include_pair_align: bool = False):
     """
     run the functions above to combine file parts
     
@@ -266,16 +266,3 @@ def concatenate_parts(splitname: str,
     if include_pair_align:
         combine_hmm_align_inputs(splitname = splitname,
                                  pfams_in_order = pfams_in_order)
-
-
-if __name__ == '__main__':
-    import sys
-    
-    # ran this on the command line
-    splitname = sys.argv[1]
-    include_pair_align = bool( int( sys.argv[2] ) )
-    
-    concatenate_parts(splitname = splitname,
-                      alphabet_size = 20,
-                      include_pair_align = include_pair_align)
-    

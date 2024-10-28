@@ -16,13 +16,13 @@ from initial_cleaning.clean_short_peps_invalid_chars import clean_short_peps_inv
 from initial_cleaning.prune_trees_after_msa_clean import prune_trees_after_msa_clean
 from initial_cleaning.stats_after_cleaning import (serially_pfam_level_metadata,
                                                    clan_level_metadata)
-from utils import find_missing_info
+from utils.utils import find_missing_info
 
 
-def initial_cleaning(pfam_seed_file: str,
-                     header: str,
-                     seed_alignment_dir: str = 'seed_alignments',
-                     tree_dir: str = 'trees'):
+def main(pfam_seed_file: str,
+         header: str,
+         seed_alignment_dir: str = 'seed_alignments',
+         tree_dir: str = 'trees'):
     """
     after downloading pfam seed alignments file, clean and split into .seed
       and .tree files per acceptable PFam
@@ -97,8 +97,7 @@ def initial_cleaning(pfam_seed_file: str,
         [g.write(f'{key}\t{val}\n') for key, val in out_dict.items()]
 
 
-
-## internal testing
 if __name__ == '__main__':
-    initial_cleaning(pfam_seed_file = 'EXAMPLE_Pfam-A.seed',
-                      header ='# PFam v36.0; example pfams')
+    main(pfam_seed_file = "EXAMPLE_Pfam-A.seed",
+         header = "# PFam v36")
+
