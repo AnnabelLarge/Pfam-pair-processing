@@ -12,32 +12,23 @@ tar -xzvf trees.tgz && \
 mv nfs/production/agb/pfam/sequpd/36.0/Release/36.0/trees .
 
 
+Initial cleaning from pfam:
+===========================
+- run initial_cleaning() function
+- whatever MSAs are left over without trees, use FastTree v 2.1.11 No SSE3 with default options to impute trees
+- if desired, move intermediate files to another folder
+
+
+featurization:
+==============
+- trees -> list of cherries
+- split pfams
+- (DONE ON HPC) two types of featurization: either cherries (from file) or all pairs
 
 
 
 
 
-
-
-
-
-
-
-putative new order:
-[X] split seed alignments file
-[X] do all MSA cleaning; track stats as you clean
-   [X] remove short pepetides
-   [X] remove proteins with invalid chars: B,O,U,X,Z
-   [X] convert all sequences to uppercase
-   [X] remove duplicates within and across MSAs
-[X] check if MSA only has one sequence left
-[X] fix all trees when done cleaning
-[X] find pfams that are missing trees; externally need to use FastTree to replace these
-
-
-common names
--------------
 seed_alignment_dir
 tree_dir
-pfam_seed_file
 

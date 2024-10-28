@@ -8,8 +8,8 @@ Created on Sun Oct 27 02:40:59 2024
 import os
 from Bio import Phylo
 
-from remove_duplicates import (parse_within_families_file,
-                               parse_across_families_file)
+from initial_cleaning.remove_duplicates import (parse_within_families_file,
+                                                parse_across_families_file)
 from utils import (make_orig_folder,
                    move_file_to_originals,
                    rename_file_in_place)

@@ -78,13 +78,14 @@ def move_file_to_originals(filename: str,
                   f'./{in_dir}/originals/{filename}')
 
 
-def make_orig_folder(in_dir: str):
+def make_sub_folder(in_dir, sub_folder):
     """
-    make a folder to store original files
+    try making a folder inside in_dir
     
     inputs:
     -------
-        - in_dir: name of folder
+        - in_dir: name of directory to contain sub_folder
+        - sub_folder: new sub_folder
     
     returns:
     --------
@@ -92,11 +93,16 @@ def make_orig_folder(in_dir: str):
         
     outputs:
     --------
-        - new directory at {in_dir}/originals
+        - new directory at {in_dir}/{sub_folder}
     """
-    if 'originals' not in os.listdir(in_dir):
-        os.mkdir(f'{in_dir}/originals')
-        
+    if sub_folder not in os.listdir(in_dir):
+        os.mkdir(f'{in_dir}/{sub_folder}')
+
+
+def make_orig_folder(in_dir: str):
+    make_sub_folder(in_dir = in_dir, 
+                    sub_folder = 'originals') 
+    
 
 def msa_dimensions(pfam_seed_file: str):
     """
