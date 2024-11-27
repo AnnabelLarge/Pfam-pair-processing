@@ -12,7 +12,7 @@ from itertools import combinations
 import os
 from tqdm import tqdm
 
-from utils import make_sub_folder
+from utils.utils import make_sub_folder
 
 
 ### create your own class for retrieving cherries

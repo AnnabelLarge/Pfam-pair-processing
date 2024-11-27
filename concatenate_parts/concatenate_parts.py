@@ -38,8 +38,7 @@ def sort_pfam_parts(folder_name: str,
 
 def combine_metadata(splitname: str):
     """
-    concatenate the metadata for all training pairs; this is used in both
-      EvolPairHMMore and DogShow
+    concatenate the metadata for all training pairs
     
     usually the metadata dataframes for each PFam aren't split into parts...
       so don't worry about that yet?
@@ -58,7 +57,7 @@ def combine_metadata(splitname: str):
     --------
         - concatenated metadata about the training set
     """
-    folder = f'{splitname}_all_metadata'
+    folder = splitname
     
     out_meta = []
     pfams_in_order = sort_pfams(folder_name = folder)
@@ -76,10 +75,17 @@ def combine_metadata(splitname: str):
     return pfams_in_order
 
 
-def combine_neural_inputs(splitname: str,
+def combine_unaligned_inputs(splitname: str,
                           pfams_in_order: list):
     """
-    concatenate the inputs for DogShow
+    concatenate the unaligned inputs (ungapped ancestor and descendant seqs)
+    
+    unaligned_seqs_matrix = (B, L_seq, 2)
+      - dim2=0: ancestor, unaligned
+      - dim2=1: descendant, unaligned
+      - L_seq INCLUDES <bos>, <eos>
+    {prefix}_seqs_unaligned.npy
+    
     
     input:
     ------
@@ -93,40 +99,46 @@ def combine_neural_inputs(splitname: str,
     
     outputs:
     --------
-        - concatenated/combined precursors for DogShow
+        - concatenated inputs 
     """
-    folder = f'{splitname}_neural'
+    folder = splitname
     
     out_seqs_paths = []
     out_align_idxes = []
     for pfam in pfams_in_order:
         sorted_pfam_in_parts = sort_pfam_parts(folder_name = folder,
                                                pfam = pfam,
-                                               file_suffix = '_sequences_paths.npy')
+                                               file_suffix = '_seqs_unaligned.npy')
         
         for pfam_prefix in sorted_pfam_in_parts:
-            with open(f'{folder}/{pfam_prefix}_sequences_paths.npy','rb') as f:
+            with open(f'{folder}/{pfam_prefix}_seqs_unaligned.npy','rb') as f:
                 out_seqs_paths.append( np.load(f) )
-            
-            with open(f'{folder}/{pfam_prefix}_align_idxes.npy','rb') as f:
-                out_align_idxes.append( np.load(f) )
     
     out_seqs_paths = np.concatenate(out_seqs_paths, axis=0)
-    out_align_idxes = np.concatenate(out_align_idxes, axis=0)
+    longest_anc, longest_desc = np.where(out_seqs_paths != 0,
+                                         True,
+                                         False).sum(axis=1).max(axis=0)
     
-    with open(f'{splitname}_sequences_paths.npy','wb') as g:
+    with open(f'{splitname}_seqs_unaligned.npy','wb') as g:
         np.save(g, out_seqs_paths)
     
-    with open(f'{splitname}_align_idxes.npy','wb') as g:
-        np.save(g, out_align_idxes)
-    
+    with open(f'{splitname}_longest_seqs.txt','w') as g:
+        g.write(f'split\tlongest_anc\tlongest_desc\n')
+        g.write(f'{splitname}\t{longest_anc}\t{longest_desc}\n')
+        
 
-def combine_hmm_align_inputs(splitname: str,
-                             pfams_in_order: list):
+def combine_aligned_inputs(splitname: str,
+                           pfams_in_order: list):
     """
-    concatenate the precursors for EvolPairHMM (technically could 
-        put these into EvolPairHMM too? But I haven't tried that in
-        a while, so... better safe than sorry)
+    concatenate the aligned inputs (ungapped ancestor and descendant seqs)
+    
+    aligned_seqs_matrix = (B, L_align, 4)
+      - dim2=0: ancestor GAPPED (aligned)
+      - dim2=1: descendant GAPPED (aligned)
+      - dim2=2: precomputed m indexes for neural models
+      - dim2=3: precomputed n indexes for neural models
+    {prefix}_aligned_mats.npy
+    
     
     input:
     ------
@@ -140,26 +152,34 @@ def combine_hmm_align_inputs(splitname: str,
     
     outputs:
     --------
-        - concatenated/combined precursors for EvolPairHMM
+        - concatenated inputs 
     """
-    folder = f'{splitname}_hmm_pairAlignments'
+    folder = splitname
     
-    out_mat = []
+    out_seqs_paths = []
+    out_align_idxes = []
     for pfam in pfams_in_order:
         sorted_pfam_in_parts = sort_pfam_parts(folder_name = folder,
                                                pfam = pfam,
-                                               file_suffix = '_pair_alignments.npy')
+                                               file_suffix = '_aligned_mats.npy')
         
         for pfam_prefix in sorted_pfam_in_parts:
-            with open(f'{folder}/{pfam_prefix}_pair_alignments.npy','rb') as f:
-                out_mat.append( np.load(f) )
-        
-    out_mat = np.concatenate(out_mat, axis=0)
+            with open(f'{folder}/{pfam_prefix}_aligned_mats.npy','rb') as f:
+                out_seqs_paths.append( np.load(f) )
     
-    with open(f'{splitname}_pair_alignments.npy','wb') as g:
-        np.save(g, out_mat)
-        
-        
+    out_seqs_paths = np.concatenate(out_seqs_paths, axis=0)
+    longest_aligns = np.where(out_seqs_paths[:,:,0] != 0,
+                              True,
+                              False).sum(axis=1).max()
+    
+    
+    with open(f'{splitname}_aligned_mats.npy','wb') as g:
+        np.save(g, out_seqs_paths)
+    
+    with open(f'{splitname}_longest_alignment.txt','w') as g:
+        g.write(f'split\tlongest_align\n')
+        g.write(f'{splitname}\t{longest_aligns}\n')
+
 def combine_hmm_precalc_inputs(splitname: str,
                                pfams_in_order: list,
                                alphabet_size: int = 20):
@@ -230,8 +250,7 @@ def combine_hmm_precalc_inputs(splitname: str,
 
 
 def main(splitname: str,
-         alphabet_size: int = 20,
-         include_pair_align: bool = False):
+         alphabet_size: int = 20):
     """
     run the functions above to combine file parts
     
@@ -254,15 +273,17 @@ def main(splitname: str,
     # concatenate metadata, and use this to get the file ordering
     pfams_in_order = combine_metadata(splitname = splitname)
     
+    
     # concatenate everything else
-    combine_neural_inputs(splitname = splitname,
-                          pfams_in_order = pfams_in_order)
+    combine_unaligned_inputs(splitname = splitname,
+                             pfams_in_order = pfams_in_order)
+    
+    combine_aligned_inputs(splitname = splitname,
+                           pfams_in_order = pfams_in_order)
+    
+    
+    # assuming you've also precalculated pairHMM inputs, concatenate those too
     combine_hmm_precalc_inputs(splitname = splitname,
                                pfams_in_order = pfams_in_order,
                                alphabet_size = alphabet_size)
     
-    # usually don't use raw hmm pair alignments as inputs for anything,
-    #   but if you want to concatenate it, go ahead
-    if include_pair_align:
-        combine_hmm_align_inputs(splitname = splitname,
-                                 pfams_in_order = pfams_in_order)

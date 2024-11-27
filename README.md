@@ -77,15 +77,23 @@ python generate_inputs.py [PFAMS_IN_SPLIT_TEXT-FILE]
 
 #### 7.) Either precalculate all transition/emission counts and equlibrium distributions (7a), OR only equilibrium distributions (7b). Outputs from 7a are needed in order to use the `-have_precalculated_counts` flag in EvolPairHMM. Otherwise, outputs (7b) are sufficient.
 
-*7a.)* Move `precalculate_counts_for_pairHMM.py` to current working directory. Use it on all valid folders of intermediates (named `[SPLITNAME]_hmm_pairAlignments`), then run-
+*7a.)* Move `precalculate_counts_for_pairHMM.py` to current working directory, and run-
 ```
-python precalculate_counts_for_pairHMM.py [BATCH_SIZE]
+python precalculate_counts_for_pairHMM.py [SPLIT_NAME] [BATCH_SIZE]
 ```
-Where `[BATCH_SIZE]` is how many pairs to process at once.  
+Where:
+  - `[SPLIT_NAME]` is the folder that contains all aligned outputs
+    - main function will be applied to all files in the folder ending in `_aligned_mats.npy`
+  - `[BATCH_SIZE]` is how many pairs to process at once.  
 
 **OR**  
 
-*7b.)* Use a different script for only precalculating the equilibrium distributions (same trace though): `precalculate_equl_dists_for_pairHMM.py`
+*7b.)* Use a different script for only precalculating the equilibrium distributions: `precalculate_equl_dists_for_pairHMM.py`
+
+```
+python precalculate_equl_dists_for_pairHMM.py [SPLIT_NAME] [BATCH_SIZE]
+```
+Where `[SPLIT_NAME]` and `[BATCH_SIZE]` are same as before
 
 **Highly** recommended to do this on a GPU machine.  
 
@@ -94,11 +102,21 @@ Where `[BATCH_SIZE]` is how many pairs to process at once.
 python pfam_pair_processing.py \
   -task concat_parts \
   -splitname [SPLITNAME] \
-  -alphabet_size [default=20] \
-  -include_pair_align [default=FALSE]
+  -alphabet_size [default=20]
 ```
 on all splits.
 
 
 ## Example data
 Example seed alignment file and trees found in `./EXAMPLE_INPUTS`. 
+
+## Ordering
+Possible emissions are indexed in alphabetical order, according to one-letter abbreviation. For a 20-element equilibrium distribution vector over amino acids:
+- i=0: Alanine
+- i=1: Cysteine
+- i=2: Aspartic Acid (Aspartate)
+- and so on
+
+I understand this ordering is controversial. Oh well, it's too late to go back.  
+
+Possible transitions are indexed in this order: Match, Insert, Delete.

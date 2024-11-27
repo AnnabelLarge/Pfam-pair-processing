@@ -9,7 +9,7 @@ import argparse
 import sys
 
 from initial_cleaning.initial_cleaning import main as initial_cleaning_fn
-from prepare_for_featurization.make_split import make_split 
+from prepare_for_featurization.make_splits import make_splits
 from prepare_for_featurization.prepare_for_featurization import main as split_n_pick 
 from concatenate_parts.concatenate_parts import main as concat_parts
 
@@ -79,12 +79,6 @@ parser.add_argument('-alphabet_size',
                     default=20,
                     help ='(int) base alphabet size; 20 for amino acids')
 
-parser.add_argument('-include_pair_align',
-                    type=bool,
-                    default=False,
-                    help ='(bool) whether or not to concatenate the intermediates')
-
-
 args = parser.parse_args()
 
 
@@ -94,8 +88,8 @@ if args.task == 'initial_cleaning':
                         header = args.header)
 
 elif args.task == 'split_data':
-    make_split(pfam_seed_file = args.pfam_seed_file,
-               num_splits = args.num_splits.
+    make_splits(pfam_seed_file = args.pfam_seed_file,
+               num_splits = args.num_splits,
                rand_key = args.rand_key,
                topk1_valid = args.topk1_valid,
                topk2_valid = args.topk2_valid)
@@ -104,13 +98,12 @@ elif args.task == 'pick_cherries_split_data':
     # combination of picke trees and make_splits
     split_n_pick(pfam_seed_file = args.pfam_seed_file,
                  tree_dir = args.tree_dir,
-                 num_splits = args.num_splits.
+                 num_splits = args.num_splits,
                  rand_key = args.rand_key,
                  topk1_valid = args.topk1_valid,
                  topk2_valid = args.topk2_valid)
 
 elif args.task == 'concat_parts':
     concat_parts(splitname = args.splitname,
-                 alphabet_size = args.alphabet_size,
-                 include_pair_align = args.include_pair_align)
+                 alphabet_size = args.alphabet_size)
 

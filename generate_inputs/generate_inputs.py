@@ -13,8 +13,7 @@ import random
 import math
 from copy import deepcopy
 
-from generate_inputs.precompute_align_idxes import generate_indices
-from utils import make_sub_folder
+from utils.utils import make_sub_folder
 
 
 def safe_int16(mat):
@@ -145,71 +144,201 @@ def get_alphabet():
     return mapping
 
 def reversible_featurizer(str_alignment, mapping, max_len):
-    # first sample is forward, second sample is reverse
-    raw_neural_format = np.zeros( (2, max_len, 3), dtype='int8' )
-    hmm_align_format = np.zeros( (2, max_len, 2), dtype='int8' )
+    """
+    unaligned_seqs_matrix = (B, L_seq, 2)
+      - dim2=0: ancestor, unaligned
+      - dim2=1: descendant, unaligned
+      - L_seq INCLUDES <bos>, <eos>
     
-    def update_buckets( b, align_idx, anc_char, desc_char, anc_pos, desc_pos):
-        # deletion
-        if (desc_char == '.') & (anc_char != '.'):
-            raw_neural_format[b, anc_pos, 0] = mapping[anc_char]
-            anc_pos += 1
-            
-            raw_neural_format[b, align_idx, 2] = mapping['.']
-            
-            hmm_align_format[b, align_idx, 0] = mapping[anc_char]
-            hmm_align_format[b, align_idx, 1] = mapping['.']
-            
-        # insertion 
-        elif (anc_char == '.') & (desc_char != '.'):
-            raw_neural_format[b, desc_pos, 1] = mapping[desc_char]
-            desc_pos += 1
-            
-            raw_neural_format[b, align_idx, 2] = mapping[desc_char] + 20
-            
-            hmm_align_format[b, align_idx, 0] = mapping['.']
-            hmm_align_format[b, align_idx, 1] = mapping[desc_char]
-            
-        # match 
-        elif (anc_char != '.') & (desc_char != '.'):
-            raw_neural_format[b, anc_pos, 0] = mapping[anc_char]
-            anc_pos += 1
-            raw_neural_format[b, desc_pos, 1] = mapping[desc_char]
-            desc_pos += 1
-            
-            raw_neural_format[b, align_idx, 2] = mapping[desc_char]
-            
-            hmm_align_format[b, align_idx, 0] = mapping[anc_char]
-            hmm_align_format[b, align_idx, 1] = mapping[desc_char]
+    aligned_seqs_matrix = (B, L_align, 4)
+      - dim2=0: ancestor GAPPED (aligned)
+      - dim2=1: descendant GAPPED (aligned)
+      - dim2=2: precomputed m indexes for neural models
+      - dim2=3: precomputed n indexes for neural models
+    
+    """
+    # dim0=0 is forward pair, dim0=1 is reverse pair
+    unaligned_seqs_matrix = np.zeros( (2, max_len+2, 2), dtype = 'int8' )
+    aligned_seqs_matrix = np.zeros( (2, max_len+2, 4), dtype = 'int8' )
+    
+    # padding token for aligned_seqs_matrix[:,:,[2,3]] should be -9
+    aligned_seqs_matrix[:,:,[2,3]] = -9
+    
+    
+    ################################
+    ### initialize first positions #
+    ################################
+    # <bos> to start each unaligned sequence
+    unaligned_seqs_matrix[:, 0, :] = 1
+    
+    # <bos> to start each aligned sequence
+    aligned_seqs_matrix[:, 0, [0,1]] = 1
+    
+    # precomputed counts start with (m=1, n=0)
+    aligned_seqs_matrix[:, 0, 2] = 1
+    aligned_seqs_matrix[:, 0, 3] = 0
+    
+    
+    ##########################################################
+    ### step through alignment to fill from string_alignment #
+    ##########################################################
+    def update_buckets( which, 
+                        align_idx, 
+                        anc_char, 
+                        desc_char, 
+                        anc_pos, 
+                        desc_pos):
         
+        ##############
+        ### deletion #
+        ##############
+        if (desc_char == '.') & (anc_char != '.'):
+            ### add to unaligned seq features
+            # ancestor
+            unaligned_seqs_matrix[which, anc_pos, 0] = mapping[anc_char]
+            
+            # (no descendant sequence to add)
+            
+            
+            ### add to aligned seq features
+            # gapped ancestor
+            aligned_seqs_matrix[which, align_idx, 0] = mapping[anc_char]
+            
+            # gapped descendant
+            aligned_seqs_matrix[which, align_idx, 1] =mapping['.']
+            
+            # at delete site: (m+1, n)
+            # precomputed m for NEXT ALIGN IDX
+            prev_m = aligned_seqs_matrix[which, align_idx-1, 2]
+            aligned_seqs_matrix[which, align_idx, 2] = prev_m + 1
+            
+            # precomputed n for NEXT ALIGN IDX
+            prev_n = aligned_seqs_matrix[which, align_idx-1, 3]
+            aligned_seqs_matrix[which, align_idx, 3] = prev_n
+            
+            
+            ### update buckets for next iter
+            anc_pos += 1
+            
+            
+        ###############
+        ### insertion #
+        ###############
+        elif (anc_char == '.') & (desc_char != '.'):
+            ### add to unaligned seq features
+            # (no ancestor sequence to add)
+            
+            # descendant
+            unaligned_seqs_matrix[which, desc_pos, 1] = mapping[desc_char]
+            
+            
+            ### add to aligned seq features
+            # gapped ancestor
+            aligned_seqs_matrix[which, align_idx, 0] = mapping['.']
+            
+            # gapped descendant
+            aligned_seqs_matrix[which, align_idx, 1] =mapping[desc_char]
+            
+            # at insert site: (m, n+1)
+            # precomputed m for NEXT ALIGN IDX
+            prev_m = aligned_seqs_matrix[which, align_idx-1, 2]
+            aligned_seqs_matrix[which, align_idx, 2] = prev_m 
+            
+            # precomputed n for NEXT ALIGN IDX
+            prev_n = aligned_seqs_matrix[which, align_idx-1, 3]
+            aligned_seqs_matrix[which, align_idx, 3] = prev_n + 1
+            
+            
+            ### update buckets for next iter
+            desc_pos += 1
+            
+            
+        ###########
+        ### match #
+        ###########
+        elif (anc_char != '.') & (desc_char != '.'):
+            ### add to unaligned seq features
+            # ancestor
+            unaligned_seqs_matrix[which, anc_pos, 0] = mapping[anc_char]
+            
+            # descendant
+            unaligned_seqs_matrix[which, desc_pos, 1] = mapping[desc_char]
+            
+            
+            ### add to aligned seq features
+            # gapped ancestor
+            aligned_seqs_matrix[which, align_idx, 0] = mapping[anc_char]
+            
+            # gapped descendant
+            aligned_seqs_matrix[which, align_idx, 1] =mapping[desc_char]
+            
+            # at match site: (m+1, n+1)
+            # precomputed m for NEXT ALIGN IDX
+            prev_m = aligned_seqs_matrix[which, align_idx-1, 2]
+            aligned_seqs_matrix[which, align_idx, 2] = prev_m  + 1
+            
+            # precomputed n for NEXT ALIGN IDX
+            prev_n = aligned_seqs_matrix[which, align_idx-1, 3]
+            aligned_seqs_matrix[which, align_idx, 3] = prev_n + 1
+            
+            
+            ### update buckets for next iter
+            anc_pos += 1
+            desc_pos += 1
+            
         return anc_pos, desc_pos
     
     
-    assert len(str_alignment) < PAD_TO
+    assert len(str_alignment) <= max_len
 
-    fw_anc_pos = 0
-    fw_desc_pos = 0
-    rv_anc_pos = 0
-    rv_desc_pos = 0
-    for align_idx, (seq1_char, seq2_char) in enumerate(str_alignment):
+    fw_anc_pos = 1
+    fw_desc_pos = 1
+    rv_anc_pos = 1
+    rv_desc_pos = 1
+    for i, (seq1_char, seq2_char) in enumerate(str_alignment):
+        # increment up by one, since you've already initialized first
+        # positions
+        align_idx = i+1
+        
         # forward: (seq1, seq2)
-        fw_anc_pos, fw_desc_pos = update_buckets(b = 0,
-                                                 align_idx = align_idx,
-                                                 anc_char = seq1_char, 
-                                                 desc_char = seq2_char, 
-                                                 anc_pos = fw_anc_pos, 
-                                                 desc_pos = fw_desc_pos)
+        fw_out = update_buckets(which = 0,
+                                align_idx = align_idx,
+                                anc_char = seq1_char, 
+                                desc_char = seq2_char, 
+                                anc_pos = fw_anc_pos, 
+                                desc_pos = fw_desc_pos)
+        fw_anc_pos, fw_desc_pos = fw_out
+        del fw_out
         
         # reverse: (seq2, seq1)
-        rv_anc_pos, rv_desc_pos = update_buckets(b = 1,
-                                                 align_idx = align_idx,
-                                                 anc_char = seq2_char, 
-                                                 desc_char = seq1_char, 
-                                                 anc_pos = rv_anc_pos, 
-                                                 desc_pos = rv_desc_pos)
+        rv_out = update_buckets(which = 1,
+                                align_idx = align_idx,
+                                anc_char = seq2_char, 
+                                desc_char = seq1_char, 
+                                anc_pos = rv_anc_pos, 
+                                desc_pos = rv_desc_pos)
+        rv_anc_pos, rv_desc_pos = rv_out
+        del rv_out
+    
+    
+    ###################################
+    ### Add <eos> to end of sequences #
+    ###################################
+    ### updated unaligned_seqs_matrix 
+    # forward: fw_anc_pos, fw_desc_pos
+    unaligned_seqs_matrix[0, fw_anc_pos, 0] = 2
+    unaligned_seqs_matrix[0, fw_desc_pos, 1] = 2
+    
+    # reverse: rv_anc_pos, rv_desc_pos
+    unaligned_seqs_matrix[1, rv_anc_pos, 0] = 2
+    unaligned_seqs_matrix[1, rv_desc_pos, 1] = 2
+    
+    
+    ### update aligned_seqs_matrix at align_idx + 1
+    aligned_seqs_matrix[:, align_idx+1, [0,1]] = 2
         
-        
-    return raw_neural_format, hmm_align_format
+    return unaligned_seqs_matrix, aligned_seqs_matrix
+
 
 def encode_one_pair(i, seq1, seq2, tree, raw_msa, pfam):
     dist = tree.distance(seq1,seq2)
@@ -230,82 +359,40 @@ def encode_one_pair(i, seq1, seq2, tree, raw_msa, pfam):
     
     # swap info between anc and desc for reverse pair
     add_to_rv = {'perc_seq_id': add_to_fw['perc_seq_id'],
-                 'anc_seq_len': add_to_fw['desc_seq_len'],
-                 'desc_seq_len': add_to_fw['anc_seq_len'],
-                 'alignment_len': add_to_fw['alignment_len'],
-                 'num_matches': add_to_fw['num_matches'],
-                 'num_subs': add_to_fw['num_subs'],
-                 'num_ins': add_to_fw['num_dels'],
-                 'num_dels': add_to_fw['num_ins']
-                 }
+                  'anc_seq_len': add_to_fw['desc_seq_len'],
+                  'desc_seq_len': add_to_fw['anc_seq_len'],
+                  'alignment_len': add_to_fw['alignment_len'],
+                  'num_matches': add_to_fw['num_matches'],
+                  'num_subs': add_to_fw['num_subs'],
+                  'num_ins': add_to_fw['num_dels'],
+                  'num_dels': add_to_fw['num_ins']
+                  }
     rv_pair_level_metadata = {**rv_pair_level_metadata, **add_to_rv}
     del add_to_fw, add_to_rv
     
     
     # generate neural and hmm pair alignment inputs in one go
     mapping = get_alphabet()
-    raw_neural_format, hmm_align_format = reversible_featurizer(str_alignment = str_alignment, 
+    unaligned_seqs_matrix, aligned_seqs_matrix = reversible_featurizer(str_alignment = str_alignment, 
                                                                 mapping = mapping, 
                                                                 max_len = PAD_TO)
     
     return (fw_pair_level_metadata, 
             rv_pair_level_metadata, 
-            raw_neural_format, 
-            hmm_align_format)
+            unaligned_seqs_matrix, 
+            aligned_seqs_matrix)
 
 
-def validate_eos(raw_neural_format, seqlens):
-    # <eos> should only appear once
-    assert np.allclose(np.where(raw_neural_format == 2, 1, 0).sum(axis=1),
-                       np.ones((raw_neural_format.shape[0], raw_neural_format.shape[2]), dtype='int8')
-                       )
-    
-    # seqlens should be the same as before
-    new_seqlens = np.where((raw_neural_format != 0) & (raw_neural_format != 2), 
-                           1, 
-                           0).sum(axis=1)
-    assert np.allclose(new_seqlens, seqlens)
-    
-    # padding tokens should appear AFTER <eos>, not before
-    lengths = np.arange(raw_neural_format.shape[1], dtype='int16')[None, :, None]
-    lengths = np.broadcast_to(lengths, raw_neural_format.shape)
-    
-    padding_idxes = np.where(raw_neural_format==0, 
-                             lengths,
-                             9999)
-    start_of_padding = padding_idxes.min(axis=1)
-    assert np.allclose(start_of_padding - seqlens,
-                       np.ones(start_of_padding.shape))
-
-def add_bos_eos(raw_neural_format, validate=True):
-    new_eos_col = np.zeros( (raw_neural_format.shape[0], 
-                             1, 
-                             raw_neural_format.shape[2]), dtype='int8' )
-    with_eos = np.concatenate([raw_neural_format, new_eos_col], axis=1)
-    seqlens = np.where(with_eos != 0, 1, 0).sum(axis=1)
-    
-    with_eos[range(with_eos.shape[0]), seqlens[:,0], 0] = 2
-    with_eos[range(with_eos.shape[0]), seqlens[:,1], 1] = 2
-    with_eos[range(with_eos.shape[0]), seqlens[:,2], 2] = 2
-    
-    if validate:
-        validate_eos(with_eos, seqlens)
-    
-    new_bos_col = np.ones( (with_eos.shape[0], 
-                             1, 
-                             with_eos.shape[2]), dtype='int8' )
-    
-    neural_format = np.concatenate([new_bos_col, with_eos], axis=1)
-    
-    return neural_format
-
-
-def featurize_one_pfam(pfam, seed_folder, trees_folder, pairs_from, filename,
+def featurize_one_pfam(pfam, 
+                       seed_folder, 
+                       trees_folder, 
+                       pairs_from, 
+                       filename,
                        percent_of_pairs = None):
     ### read inputs, get pairs
     raw_msa, tree, pfam_level_metadata = read_inputs(pfam = pfam, 
-                                                     seed_folder = seed_folder, 
-                                                     trees_folder = trees_folder)
+                                                      seed_folder = seed_folder, 
+                                                      trees_folder = trees_folder)
     
     if pairs_from == 'rand_samp':
         pairs = generate_random_pairs(seqnames = raw_msa.keys(), 
@@ -323,8 +410,11 @@ def featurize_one_pfam(pfam, seed_folder, trees_folder, pairs_from, filename,
     
     ### iterate through pairs
     metadata = []
-    raw_neural_format = []
-    hmm_align_format = []
+    unaligned_outputs = []
+    aligned_outputs = []
+    
+    # raw_neural_format = []
+    # hmm_align_format = []
     for pair_id, (seq1, seq2) in enumerate(pairs):
         out = encode_one_pair(i = pair_id, 
                               seq1 = seq1, 
@@ -334,41 +424,22 @@ def featurize_one_pfam(pfam, seed_folder, trees_folder, pairs_from, filename,
                               pfam = pfam)
         metadata.append(out[0])
         metadata.append(out[1])
-        raw_neural_format.append(out[2])
-        hmm_align_format.append(out[3])
+        unaligned_outputs.append(out[2])
+        aligned_outputs.append(out[3])
     
     metadata = pd.DataFrame(metadata)
-    raw_neural_format = np.concatenate(raw_neural_format, axis=0)
-    hmm_align_format = np.concatenate(hmm_align_format, axis=0)
+    unaligned_outputs = np.concatenate(unaligned_outputs, axis=0)
+    aligned_outputs = np.concatenate(aligned_outputs, axis=0)
     
     
     ### add pfam level info to metadata
     for key, val in pfam_level_metadata.items():
         metadata[key] = val
+        
+    unaligned_outputs = safe_int8(unaligned_outputs)
+    aligned_outputs = safe_int16(aligned_outputs)
     
-    
-    ### update and add to neural inputs
-    # add <eos>, <bos> to neural inputs
-    neural_format = add_bos_eos(raw_neural_format = raw_neural_format, 
-                                validate = False)
-    
-    
-    del raw_msa, tree, pfam_level_metadata, pairs, pair_id, seq1, seq2, out
-    del raw_neural_format
-    
-    # precompute alignment indices for neural inputs
-    neural_align_idxes = generate_indices(full_mat = neural_format, 
-                                          num_regular_toks=20, 
-                                          gap_tok = 43, 
-                                          align_pad = -9)
-    
-    neural_dset = {'sequences_paths': safe_int8(neural_format),
-                    'align_idxes': safe_int16(neural_align_idxes)}
-    
-    hmm_pair = {'pair_alignments': safe_int8(hmm_align_format)}
-    
-    return neural_dset, hmm_pair, metadata 
-
+    return unaligned_outputs, aligned_outputs, metadata
 
 
 ##################################
@@ -388,30 +459,18 @@ def make_rand_samp(pfam,
                              filename = file_of_cherries)
     
     if out != None:
-        neural_dset = out[0]
-        hmm_pair = out[1]
+        unaligned_outputs = out[0]
+        aligned_outputs = out[1]
         metadata = out[2]
         
-        ### neural
-        folder = f'{dset_prefix}_neural'
-        for file_suffix, mat in neural_dset.items():
-            with open(f'{folder}/{pfam}_{file_suffix}.npy','wb') as g:
-                np.save(g, mat)
-        del folder
+        with open(f'{dset_prefix}/{pfam}_seqs_unaligned.npy', 'wb') as g:
+            np.save(g, unaligned_outputs)
         
+        with open(f'{dset_prefix}/{pfam}_aligned_mats.npy', 'wb') as g:
+            np.save(g, aligned_outputs)
         
-        ### hmm pair align
-        folder = f'{dset_prefix}_hmm_pairAlignments'
-        for file_suffix, mat in hmm_pair.items():
-            with open(f'{folder}/{pfam}_{file_suffix}.npy', 'wb') as g:
-                np.save(g, mat)
-        del folder
+        metadata.to_csv(f'{dset_prefix}/{pfam}_metadata.tsv', sep='\t')
         
-        
-        ### metadata (copy to every folder)
-        folder = f'{dset_prefix}_all_metadata'
-        metadata.to_csv(f'{folder}/{pfam}_metadata.tsv', sep='\t')
-
 
 
 ##########################################################
@@ -423,36 +482,23 @@ def samples_from_file(pfam,
                       filename,
                       dset_prefix):
     out = featurize_one_pfam(pfam = pfam, 
-                             seed_folder = seed_folder,
-                             trees_folder = trees_folder, 
-                             pairs_from = 'file',
-                             filename = filename)
+                              seed_folder = seed_folder,
+                              trees_folder = trees_folder, 
+                              pairs_from = 'file',
+                              filename = filename)
     
     if out != None:
-        neural_dset = out[0]
-        hmm_pair = out[1]
+        unaligned_outputs = out[0]
+        aligned_outputs = out[1]
         metadata = out[2]
         
-        ### neural
-        folder = f'{dset_prefix}_neural'
-        for file_suffix, mat in neural_dset.items():
-            with open(f'{folder}/{pfam}_{file_suffix}.npy','wb') as g:
-                np.save(g, mat)
-        del folder
+        with open(f'{dset_prefix}/{pfam}_seqs_unaligned.npy', 'wb') as g:
+            np.save(g, unaligned_outputs)
         
+        with open(f'{dset_prefix}/{pfam}_aligned_mats.npy', 'wb') as g:
+            np.save(g, aligned_outputs)
         
-        ### hmm pair align
-        folder = f'{dset_prefix}_hmm_pairAlignments'
-        for file_suffix, mat in hmm_pair.items():
-            with open(f'{folder}/{pfam}_{file_suffix}.npy', 'wb') as g:
-                np.save(g, mat)
-        del folder
-        
-        
-        ### metadata (copy to every folder)
-        folder = f'{dset_prefix}_all_metadata'
-        metadata.to_csv(f'{folder}/{pfam}_metadata.tsv', sep='\t')
-
+        metadata.to_csv(f'{dset_prefix}/{pfam}_metadata.tsv', sep='\t')
 
 
 
@@ -473,26 +519,26 @@ if __name__ == '__main__':
     
     ### This is the text file that lists pfams in a given split
     pfam_filename = sys.argv[1]
-    
     splitname = pfam_filename.replace('.tsv','').split('_')[-1]
     
-    rand_dset_prefix = f'FIVEPERC-RAND_{splitname}'
-    cherries_dset_prefix = f'CHERRIES_{splitname}'
+    
+    ### folder for random and cherry pairs
+    rand_dset = f'FIVEPERC-RAND_{splitname}'
+    cherries_dset = f'CHERRIES_{splitname}'
+    make_sub_folder(in_dir = '.', sub_folder=rand_dset)
+    make_sub_folder(in_dir = '.', sub_folder=cherries_dset)
     percent_of_pairs = 0.05
     
     
+    ### parse the pfams in the split
     with open(f'pfams_in_parts/{pfam_filename}','r') as f:
         pfams_in_split = [line.strip() for line in f]
 
     file_lst = [f'CHERRIES-FROM_trees/{pf}_cherries.tsv' 
                 for pf in pfams_in_split]
     
-    for suffix in ['neural', 'hmm_pairAlignments', 'all_metadata']: 
-        rand_folder = f'{rand_dset_prefix}_{suffix}'
-        cherries_folder = f'{cherries_dset_prefix}_{suffix}'
-        make_sub_folder(in_dir = '.', sub_folder=rand_folder)
-        make_sub_folder(in_dir = '.', sub_folder=cherries_folder)
     
+    ### iterate to make inputs
     for i in range(len(pfams_in_split)):
         if i % 10 == 0:
             print(f'{i}/{len(pfams_in_split)}')
@@ -503,11 +549,11 @@ if __name__ == '__main__':
         
         ### random sample (NOT including cherries)
         make_rand_samp(pfam = pfam, 
-                       seed_folder = 'seed_alignments',
-                       trees_folder = 'trees',
-                       file_of_cherries = file_of_cherries,
-                       percent_of_pairs = percent_of_pairs,
-                       dset_prefix = rand_dset_prefix)
+                        seed_folder = 'seed_alignments',
+                        trees_folder = 'trees',
+                        file_of_cherries = file_of_cherries,
+                        percent_of_pairs = percent_of_pairs,
+                        dset_prefix = rand_dset)
         
         
         ### all possible cherries
@@ -515,7 +561,7 @@ if __name__ == '__main__':
                           seed_folder = 'seed_alignments',
                           trees_folder = 'trees',
                           filename = file_of_cherries,
-                          dset_prefix = cherries_dset_prefix)
+                          dset_prefix = cherries_dset)
     
     
     
