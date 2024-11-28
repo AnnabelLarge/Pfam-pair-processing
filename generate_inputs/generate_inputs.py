@@ -36,8 +36,7 @@ def safe_int32(mat):
     assert mat.min() >= -2147483648
     assert mat.max() <= 2147483647
     return mat.astype('int32')
-    
-    
+  
 def read_inputs(pfam, seed_folder, trees_folder):
     raw_msa = {}
     pfam_level_meta = {'pfam': pfam,
@@ -158,8 +157,8 @@ def reversible_featurizer(str_alignment, mapping, max_len):
     
     """
     # dim0=0 is forward pair, dim0=1 is reverse pair
-    unaligned_seqs_matrix = np.zeros( (2, max_len+2, 2), dtype = 'int8' )
-    aligned_seqs_matrix = np.zeros( (2, max_len+2, 4), dtype = 'int8' )
+    unaligned_seqs_matrix = np.zeros( (2, max_len+2, 2) )
+    aligned_seqs_matrix = np.zeros( (2, max_len+2, 4) )
     
     # padding token for aligned_seqs_matrix[:,:,[2,3]] should be -9
     aligned_seqs_matrix[:,:,[2,3]] = -9
@@ -336,6 +335,11 @@ def reversible_featurizer(str_alignment, mapping, max_len):
     
     ### update aligned_seqs_matrix at align_idx + 1
     aligned_seqs_matrix[:, align_idx+1, [0,1]] = 2
+
+
+    ### try encoding
+    unaligned_seqs_matrix = safe_int8(unaligned_seqs_matrix)
+    aligned_seqs_matrix = safe_int16(aligned_seqs_matrix)
         
     return unaligned_seqs_matrix, aligned_seqs_matrix
 
